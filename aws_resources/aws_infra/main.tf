@@ -311,7 +311,6 @@ module "eks_node_group" {
   cluster_version    = "1.21"
   node_group_name    = "tasky-eks-node-group"
   node_group_subnets = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  node_group_version = "1.21"
   desired_capacity   = 2
   max_capacity       = 3
   min_capacity       = 1
