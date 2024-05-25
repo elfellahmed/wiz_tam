@@ -236,7 +236,7 @@ resource "aws_instance" "mongodb" {
             
             cat <<'EOF3' > /home/ec2-user/mongo_backup.sh
             #!/bin/bash
-            TIMESTAMP=$(date +%F-%H%M)
+            TIMESTAMP=\$(date +%F-%H%M)
             BACKUP_NAME="mongo-backup-\$TIMESTAMP"
             sudo mongodump --out /home/ec2-user/\$BACKUP_NAME
             aws s3 cp /home/ec2-user/\$BACKUP_NAME s3://${aws_s3_bucket.mongodb_backup.bucket}/\$BACKUP_NAME --recursive
@@ -264,10 +264,35 @@ resource "random_id" "bucket_id" {
   byte_length = 8
 }
 
-# Set bucket ACL to public-read
+# Set bucket ACL to private (default)
 resource "aws_s3_bucket_acl" "mongodb_backup_acl" {
   bucket = aws_s3_bucket.mongodb_backup.bucket
-  acl    = "public-read"
+  acl    = "private"
+}
+
+# Bucket Policy to allow public read access and listing
+resource "aws_s3_bucket_policy" "mongodb_backup_policy" {
+  bucket = aws_s3_bucket.mongodb_backup.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.mongodb_backup.arn}/*"
+      },
+      {
+        Sid       = "PublicListBucket"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:ListBucket"
+        Resource  = "${aws_s3_bucket.mongodb_backup.arn}"
+      }
+    ]
+  })
 }
 
 # EKS Cluster
