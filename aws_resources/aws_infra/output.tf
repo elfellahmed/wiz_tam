@@ -42,3 +42,8 @@ output "eks_node_group_id" {
   description = "The ID of the EKS node group"
   value       = module.eks_node_group.node_group_id
 }
+
+output "load_balancer_dns_name" {
+  description = "The DNS name of the load balancer"
+  value       = aws_lb.app_lb.dns_name
+}

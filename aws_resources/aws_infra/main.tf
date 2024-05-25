@@ -124,7 +124,7 @@ resource "aws_security_group" "lb_sg" {
 
   ingress {
     from_port   = 80
-    to_port     = 8080
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -164,8 +164,8 @@ resource "aws_instance" "mongodb" {
 }
 
 # S3 Bucket for MongoDB Backups
-resource "aws_s3_bucket" "mongodb_backup" {
-  bucket = "mongodb-backup-bucket-${random_id.bucket_id.hex}"
+resource "aws_s3_bucket_acl" "mongodb_backup_acl" {
+  bucket = aws_s3_bucket.mongodb_backup.bucket
   acl    = "public-read"
 }
 
@@ -177,7 +177,7 @@ resource "random_id" "bucket_id" {
 # EKS Cluster
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
-  cluster_name    = "my-eks-cluster"
+  cluster_name    = "tasky-eks-cluster"
   cluster_version = "1.21"
   vpc_id          = aws_vpc.main.id
   subnet_ids      = [aws_subnet.private_a.id, aws_subnet.private_b.id]
@@ -188,7 +188,7 @@ module "eks_node_group" {
   source             = "terraform-aws-modules/eks/aws//modules/node_groups"
   cluster_name       = module.eks.cluster_id
   cluster_version    = "1.21"
-  node_group_name    = "eks-node-group"
+  node_group_name    = "tasky-eks-node-group"
   node_group_subnets = [aws_subnet.private_a.id, aws_subnet.private_b.id]
   node_group_version = "1.21"
   desired_capacity   = 2
@@ -196,4 +196,87 @@ module "eks_node_group" {
   min_capacity       = 1
   instance_type      = "t2.medium"
   key_name           = var.key_name  # Replace with your key pair name
+}
+
+
+# Application Load Balancer
+resource "aws_lb" "app_lb" {
+  name               = "app-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.lb_sg.id]
+  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "app-lb"
+    Project = "wiz"
+  }
+}
+
+# Target Group for the Load Balancer
+resource "aws_lb_target_group" "app_tg" {
+  name        = "app-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    interval            = 30
+    path                = "/"
+    timeout             = 5
+    healthy_threshold   = 5
+    unhealthy_threshold = 2
+    matcher             = "200"
+  }
+
+  tags = {
+    Name = "app-tg"
+    Project = "wiz"
+  }
+}
+
+# Listener for the Load Balancer
+resource "aws_lb_listener" "app_listener" {
+  load_balancer_arn = aws_lb.app_lb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_tg.arn
+  }
+
+    tags = {
+    Name = "app-tg"
+    Project = "wiz"
+  }
+}
+
+# Kubernetes Ingress Resource
+resource "kubernetes_ingress" "app_ingress" {
+  metadata {
+    name      = "app-ingress"
+    namespace = "default"
+    annotations = {
+      "kubernetes.io/ingress.class" = "alb"
+      "alb.ingress.kubernetes.io/scheme" = "internet-facing"
+    }
+  }
+
+  spec {
+    rule {
+      http {
+        path {
+          path    = "/*"
+          backend {
+            service_name = "app-service"
+            service_port = "8080"
+          }
+        }
+      }
+    }
+  }
 }
