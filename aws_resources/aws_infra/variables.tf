@@ -1,6 +1,6 @@
 variable "region" {
   description = "AWS region"
-  default     = "eu-central-1"
+  default     = "us-east-1"
 }
 
 variable "instance_type" {
@@ -10,5 +10,5 @@ variable "instance_type" {
 
 variable "key_name" {
   description = "Name of the key pair"
-  default     = "my-key"  # to be replaced with my key
+  default     = "ssh-eks-key"
 }
