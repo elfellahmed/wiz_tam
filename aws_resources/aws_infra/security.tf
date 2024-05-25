@@ -80,12 +80,6 @@ resource "aws_iam_instance_profile" "mongodb_instance_profile" {
   role = aws_iam_role.mongodb_role.name
 }
 
-# Set bucket ACL to private (default)
-resource "aws_s3_bucket_acl" "mongodb_backup_acl" {
-  bucket = aws_s3_bucket.mongodb_backup.bucket
-  acl    = "private"
-}
-
 # Bucket Policy to allow public read access and listing
 resource "aws_s3_bucket_policy" "mongodb_backup_policy" {
   bucket = aws_s3_bucket.mongodb_backup.id
@@ -124,3 +118,33 @@ resource "kubernetes_secret" "mongodb_connection_string" {
   type = "Opaque"
 }
 
+resource "aws_iam_role" "eks_node_group_role" {
+  name = "eks-node-group-role"
+
+  assume_role_policy = data.aws_iam_policy_document.eks_node_assume_role_policy.json
+}
+
+data "aws_iam_policy_document" "eks_node_assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "eks_node_group_policy" {
+  role       = aws_iam_role.eks_node_group_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
+  role       = aws_iam_role.eks_node_group_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_read_only_policy" {
+  role       = aws_iam_role.eks_node_group_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
