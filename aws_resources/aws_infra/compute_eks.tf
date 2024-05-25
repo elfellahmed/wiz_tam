@@ -82,7 +82,7 @@ module "eks" {
   vpc_id          = aws_vpc.main.id
   subnet_ids      = [aws_subnet.private_a.id, aws_subnet.private_b.id]
 
-  node_groups = {
+  eks_managed_node_groups = {
     tasky = {
       desired_capacity = 2
       max_capacity     = 3
