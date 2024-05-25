@@ -1,0 +1,38 @@
+Plan Wiz tech assignment - 3 tier application on AWS - Tasky
+
+DAY 1:
+	Design Phase:
+		Lucidchart diagrams:
+			Architecture and Network
+			Security
+		Review AWS SAA notes & course
+
+	Environment setup Phase:
+		AWS Accounts, Prod, SSO login
+		VPC and subnets
+		Github
+		Terraform and Helm
+
+
+	App deployment Phase:
+		Tasky Image
+		CI/CD pipeline
+
+DAY 2:
+	Configuration Phase:
+
+	Optimization and improvement Phase:
+		CI CD pipeline integration with Github and Github actions
+		Flow and CI/CD pipeline diagrams
+
+	Testing Phase:
+
+	Internal Demo Phase:
+
+DAY 3&4:
+	Slides Phase:
+
+	Dry Run Phase:
+
+	Hardening suggestions
+	Q&As prep
