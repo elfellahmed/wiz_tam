@@ -288,10 +288,33 @@ module "eks_node_group" {
   key_name           = var.key_name  # Replace with your key pair name
 }
 
+# Kubernetes provider configuration
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+}
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_id
+}
+
+# Create Kubernetes Secret for MongoDB connection string
+resource "kubernetes_secret" "mongodb_connection_string" {
+  metadata {
+    name = "mongodb-connection-string"
+  }
+
+  data = {
+    connection-string = "mongodb://appuser:apppassword@${aws_instance.mongodb.private_ip}:27017/mydatabase"
+  }
+
+  type = "Opaque"
+}
 
 # Application Load Balancer
 resource "aws_lb" "app_lb" {
-  name               = "app-load-balancer"
+  name               = "tasky-load-balancer"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.lb_sg.id]
@@ -300,14 +323,14 @@ resource "aws_lb" "app_lb" {
   enable_deletion_protection = false
 
   tags = {
-    Name = "app-lb"
+    Name = "tasky-app-lb"
     Project = "wiz"
   }
 }
 
 # Target Group for the Load Balancer
 resource "aws_lb_target_group" "app_tg" {
-  name        = "app-tg"
+  name        = "tasky-app-tg"
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -323,7 +346,7 @@ resource "aws_lb_target_group" "app_tg" {
   }
 
   tags = {
-    Name = "app-tg"
+    Name = "tasky-app-tg"
     Project = "wiz"
   }
 }
@@ -340,33 +363,22 @@ resource "aws_lb_listener" "app_listener" {
   }
 
     tags = {
-    Name = "app-tg"
+    Name = "tasky-app-tg"
     Project = "wiz"
   }
 }
 
-# Kubernetes Ingress Resource
-resource "kubernetes_ingress" "app_ingress" {
-  metadata {
-    name      = "app-ingress"
-    namespace = "default"
-    annotations = {
-      "kubernetes.io/ingress.class" = "alb"
-      "alb.ingress.kubernetes.io/scheme" = "internet-facing"
-    }
-  }
+# Kubernetes Deployment
+resource "kubernetes_manifest" "my_app_deployment" {
+  manifest = yamldecode(file("${path.module}/../components/manifests/app-manifest.yaml"))
+}
 
-  spec {
-    rule {
-      http {
-        path {
-          path    = "/*"
-          backend {
-            service_name = "app-service"
-            service_port = "8080"
-          }
-        }
-      }
-    }
-  }
+# Kubernetes Service
+resource "kubernetes_manifest" "my_app_service" {
+  manifest = yamldecode(file("${path.module}/../components/manifests/service-manifest.yaml"))
+}
+
+# Kubernetes Ingress
+resource "kubernetes_manifest" "my_app_ingress" {
+  manifest = yamldecode(file("${path.module}/../components/manifests/ingress-manifest.yaml"))
 }
