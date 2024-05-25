@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: tasky-for-wiz
-        image: tasky-for-wiz-image #to be changed!!
+        image: 446887076331.dkr.ecr.us-east-1.amazonaws.com/tasky:latest
         env:
         - name: MONGODB_URI
           valueFrom:

@@ -2,6 +2,12 @@ provider "aws" {
   region = var.region
 }
 
+# Create EC2 Key Pair
+resource "aws_key_pair" "eks_key_pair" {
+  key_name   = var.key_name
+  public_key = file(var.public_key_path)
+}
+
 # Create a custom VPC
 resource "aws_vpc" "main" {
   cidr_block = "10.10.0.0/16"
@@ -285,7 +291,7 @@ module "eks_node_group" {
   max_capacity       = 3
   min_capacity       = 1
   instance_type      = "t2.medium"
-  key_name           = var.key_name  # Replace with your key pair name
+  key_name           = var.key_name
 }
 
 # Kubernetes provider configuration
