@@ -45,7 +45,7 @@ output "eks_cluster_id" {
 
 output "eks_node_group_id" {
   description = "The ID of the EKS node group"
-  value       = module.eks_node_group.node_group_id
+  value       = module.eks.eks_managed_node_groups["default"].id
 }
 
 output "load_balancer_dns_name" {
