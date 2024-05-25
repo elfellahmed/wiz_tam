@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tasky-for-wiz
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tasky-for-wiz
+  template:
+    metadata:
+      labels:
+        app: tasky-for-wiz
+    spec:
+      containers:
+      - name: tasky-for-wiz
+        image: tasky-for-wiz-image #to be changed!!
+        env:
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-connection-string
+              key: connection-string
+        ports:
+        - containerPort: 8080

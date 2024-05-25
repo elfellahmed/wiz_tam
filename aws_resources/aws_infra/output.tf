@@ -28,6 +28,11 @@ output "mongodb_instance_id" {
   value       = aws_instance.mongodb.id
 }
 
+output "mongodb_private_ip" {
+  description = "The private IP address of the MongoDB instance"
+  value       = aws_instance.mongodb.private_ip
+}
+
 output "s3_bucket_name" {
   description = "The name of the S3 bucket for MongoDB backups"
   value       = aws_s3_bucket.mongodb_backup.bucket
@@ -46,4 +51,14 @@ output "eks_node_group_id" {
 output "load_balancer_dns_name" {
   description = "The DNS name of the load balancer"
   value       = aws_lb.app_lb.dns_name
+}
+
+output "eks_cluster_endpoint" {
+  description = "The endpoint of the EKS cluster"
+  value       = module.eks.cluster_endpoint
+}
+
+output "eks_cluster_certificate_authority_data" {
+  description = "The certificate authority data for the EKS cluster"
+  value       = module.eks.cluster_certificate_authority_data
 }
