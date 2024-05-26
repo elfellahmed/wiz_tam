@@ -52,22 +52,22 @@ output "eks_cluster_primary_security_group_id" {
 # EKS Node Group Outputs
 output "eks_node_group_name" {
   description = "The name of the EKS node group"
-  value       = module.eks.eks_managed_node_groups["tasky"].name
+  value       = aws_eks_node_group.tasky.node_group_name
 }
 
 output "eks_node_group_arn" {
   description = "The Amazon Resource Name (ARN) of the node group"
-  value       = module.eks.eks_managed_node_groups["tasky"].arn
+  value       = aws_eks_node_group.tasky.arn
 }
 
 output "eks_node_group_status" {
   description = "The status of the EKS node group"
-  value       = module.eks.eks_managed_node_groups["tasky"].status
+  value       = aws_eks_node_group.tasky.status
 }
 
 output "eks_node_group_version" {
   description = "The Kubernetes version of the EKS node group"
-  value       = module.eks.eks_managed_node_groups["tasky"].version
+  value       = aws_eks_node_group.tasky.version
 }
 
 # Load Balancer Outputs
