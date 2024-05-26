@@ -1,30 +1,29 @@
 # Application Load Balancer
-resource "aws_lb" "app_lb" {
+resource "aws_lb" "app_alb" {
   name               = "tasky-load-balancer"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.lb_sg.id]
-  subnets            = [aws_subnet.public_a.id, aws_subnet.public_b.id]
-
-  enable_deletion_protection = false
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
 
   tags = {
-    Name = "tasky-app-lb"
+    Name    = "tasky-load-balancer"
     Project = "wiz"
   }
 }
 
-# Target Group for the Load Balancer
+# Target Group
 resource "aws_lb_target_group" "app_tg" {
-  name        = "tasky-app-tg"
+  name        = "app-tg"
   port        = 8080
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = aws_vpc.main_vpc.id
   target_type = "ip"
 
   health_check {
     interval            = 30
     path                = "/"
+    protocol            = "HTTP"
     timeout             = 5
     healthy_threshold   = 5
     unhealthy_threshold = 2
@@ -32,15 +31,16 @@ resource "aws_lb_target_group" "app_tg" {
   }
 
   tags = {
-    Name = "tasky-app-tg"
+    Name    = "app-tg"
     Project = "wiz"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
   }
 }
 
-# Listener for the Load Balancer
-resource "aws_lb_listener" "app_listener" {
-  load_balancer_arn = aws_lb.app_lb.arn
-  port              = "80"
+# Listener
+resource "aws_lb_listener" "http_listener" {
+  load_balancer_arn = aws_lb.app_alb.arn
+  port              = 80
   protocol          = "HTTP"
 
   default_action {
@@ -48,17 +48,18 @@ resource "aws_lb_listener" "app_listener" {
     target_group_arn = aws_lb_target_group.app_tg.arn
   }
 
-    tags = {
-    Name = "tasky-app-tg"
+  tags = {
+    Name    = "http-listener"
     Project = "wiz"
   }
 }
 
 # EC2 Instance for MongoDB
 resource "aws_instance" "mongodb" {
-  ami           = "ami-02e136e904f3da870"  # CentOS 6 - outdated and dont receive sec updates anymore
+  ami           = "ami-42e84f2d"  # outdated  Centos 6
   instance_type = var.instance_type
-  subnet_id     = aws_subnet.private_a.id
+  #key_name      = var.mongodb_key_name
+  subnet_id     = aws_subnet.private_subnet_1.id
   vpc_security_group_ids = [aws_security_group.mongodb_sg.id]
   iam_instance_profile        = aws_iam_instance_profile.mongodb_instance_profile.name
 
@@ -129,55 +130,3 @@ resource "aws_instance" "mongodb" {
             EOF
 }
 
-module "cluster_autoscaler_irsa_role" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "5.3.1"
-
-  role_name                        = "cluster-autoscaler"
-  attach_cluster_autoscaler_policy = true
-  cluster_autoscaler_cluster_ids   = [module.eks.cluster_id]
-  
-}
-
-# EKS Cluster
-module "eks" {
-  source          = "terraform-aws-modules/eks/aws"
-  version         = "~> 20.0"
-  cluster_name    = "tasky-eks-cluster"
-  cluster_version = "1.29"
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
-  cluster_addons = {
-    coredns = {
-      most_recent = true
-    }
-    kube-proxy = {
-      most_recent = true
-    }
-    vpc-cni = {
-      most_recent = true
-    }
-}
-  vpc_id          = aws_vpc.main.id
-  subnet_ids      = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-
-  eks_managed_node_groups = {
-    tasky = {
-      desired_capacity = 2
-      max_capacity     = 3
-      min_capacity     = 1
-      instance_type    = var.instance_type
-      capacity_type    = "ON_DEMAND"
-      key_name         = var.key_name
-    }
-  }
-  enable_cluster_creator_admin_permissions = true
-}
-
-data "aws_eks_cluster" "cluster" {
-  name = module.eks.cluster_id
-}
-
-data "aws_eks_cluster_auth" "cluster" {
-  name = module.eks.cluster_id
-}

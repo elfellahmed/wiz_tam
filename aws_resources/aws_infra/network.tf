@@ -1,91 +1,128 @@
-# Create a custom VPC
-resource "aws_vpc" "main" {
-  cidr_block = "10.10.0.0/16"
+resource "aws_vpc" "main_vpc" {
+  cidr_block           = "10.10.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
 
   tags = {
-    Name = "wiz-vpc"
+    Name    = "main"
     Project = "wiz"
   }
 }
 
-# Create public subnets for load balancer
-resource "aws_subnet" "public_a" {
-  vpc_id            = aws_vpc.main.id
+resource "aws_subnet" "private_subnet_1" {
+  vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.10.1.0/24"
   availability_zone = "${var.region}a"
 
   tags = {
-    Name = "public-subnet-a"
+    Name    = "main-private-subnet-1"
     Project = "wiz"
+    "kubernetes.io/role/internal-elb" = "1"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
   }
 }
 
-resource "aws_subnet" "public_b" {
-  vpc_id            = aws_vpc.main.id
+resource "aws_subnet" "private_subnet_2" {
+  vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.10.2.0/24"
   availability_zone = "${var.region}b"
 
   tags = {
-    Name = "public-subnet-b"
+    Name    = "main-private-subnet-2"
     Project = "wiz"
+    "kubernetes.io/role/internal-elb" = "1"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
   }
 }
 
-# Create private subnets for application and database
-resource "aws_subnet" "private_a" {
-  vpc_id            = aws_vpc.main.id
+resource "aws_subnet" "public_subnet_1" {
+  vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.10.3.0/24"
   availability_zone = "${var.region}a"
 
   tags = {
-    Name = "private-subnet-a"
+    Name    = "main-public-subnet-1"
     Project = "wiz"
+    "kubernetes.io/role/elb" = "1"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
   }
 }
 
-resource "aws_subnet" "private_b" {
-  vpc_id            = aws_vpc.main.id
+resource "aws_subnet" "public_subnet_2" {
+  vpc_id            = aws_vpc.main_vpc.id
   cidr_block        = "10.10.4.0/24"
-  availability_zone = "${var.region}b"
+  availability_zone = "${var.region}1b"
 
   tags = {
-    Name = "private-subnet-b"
+    Name    = "main-public-subnet-2"
+    Project = "wiz"
+    "kubernetes.io/role/elb" = "1"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
+  }
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  tags = {
+    Name    = "main-igw"
     Project = "wiz"
   }
 }
 
-# Create an internet gateway for the VPC
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "main-igw"
-    Project = "wiz"
-  }
-}
-
-# Create a route table for the public subnets
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
+resource "aws_route_table" "public_route_table" {
+  vpc_id = aws_vpc.main_vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+    gateway_id = aws_internet_gateway.igw.id
   }
 
   tags = {
-    Name = "public-route-table"
+    Name    = "main-public-route-table"
     Project = "wiz"
   }
 }
 
-# Associate the public subnets with the public route table
-resource "aws_route_table_association" "public_a" {
-  subnet_id      = aws_subnet.public_a.id
-  route_table_id = aws_route_table.public.id
+resource "aws_route_table" "private_route_table" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  tags = {
+    Name    = "main-private-route-table"
+    Project = "wiz"
+  }
 }
 
-resource "aws_route_table_association" "public_b" {
-  subnet_id      = aws_subnet.public_b.id
-  route_table_id = aws_route_table.public.id
+resource "aws_route_table_association" "public_subnet_1_assoc" {
+  subnet_id      = aws_subnet.public_subnet_1.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+resource "aws_route_table_association" "public_subnet_2_assoc" {
+  subnet_id      = aws_subnet.public_subnet_2.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+resource "aws_route_table_association" "private_subnet_1_assoc" {
+  subnet_id      = aws_subnet.private_subnet_1.id
+  route_table_id = aws_route_table.private_route_table.id
+}
+
+resource "aws_route_table_association" "private_subnet_2_assoc" {
+  subnet_id      = aws_subnet.private_subnet_2.id
+  route_table_id = aws_route_table.private_route_table.id
+}
+
+# EC2 Instance Connect Endpoint
+resource "aws_vpc_endpoint" "ec2_instance_connect" {
+  vpc_id             = aws_vpc.main_vpc.id
+  service_name       = "com.amazonaws.${var.region}.ec2-instance-connect"
+  vpc_endpoint_type  = "Interface"
+  security_group_ids = [aws_security_group.mongodb_sg.id]
+  subnet_ids         = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
+
+  tags = {
+    Name    = "ec2-instance-connect"
+    Project = "wiz"
+  }
 }
