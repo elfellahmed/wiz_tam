@@ -56,9 +56,9 @@ resource "aws_lb_listener" "http_listener" {
 
 # EC2 Instance for MongoDB
 resource "aws_instance" "mongodb" {
-  ami           = "ami-42e84f2d"  # outdated  Centos 6
+  ami           = "ami-09ce743f9bfe555d2"  # outdated  Ubuntu 16.04LTS
   instance_type = var.instance_type
-  #key_name      = var.mongodb_key_name
+  key_name      = var.mongodb_key_name
   subnet_id     = aws_subnet.private_subnet_1.id
   vpc_security_group_ids = [aws_security_group.mongodb_sg.id]
   iam_instance_profile        = aws_iam_instance_profile.mongodb_instance_profile.name
@@ -68,25 +68,18 @@ resource "aws_instance" "mongodb" {
     Project = "wiz"
   }
 
-  user_data = <<-EOF
+   user_data = <<-EOF
             #!/bin/bash
-            sudo yum update -y
-            sudo yum install -y epel-release
-            sudo yum install -y wget
-            sudo yum install aws-cli
+            sudo apt-get update -y
+            sudo apt-get install -y wget gnupg awscli
 
             # Add MongoDB 3.6 repository
-            cat <<EOF2 | sudo tee /etc/yum.repos.d/mongodb-org-3.6.repo
-            [mongodb-org-3.6]
-            name=MongoDB Repository
-            baseurl=https://repo.mongodb.org/yum/redhat/6/mongodb-org/3.6/x86_64/
-            gpgcheck=1
-            enabled=1
-            gpgkey=https://www.mongodb.org/static/pgp/server-3.6.asc
-            EOF2
+            wget -qO - https://www.mongodb.org/static/pgp/server-3.6.asc | sudo apt-key add -
+            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.6.list
 
             # Install MongoDB 3.6
-            sudo yum install -y mongodb-org
+            sudo apt-get update -y
+            sudo apt-get install -y mongodb-org
 
             # Start MongoDB and enable on boot
             sudo systemctl start mongod
@@ -112,21 +105,23 @@ resource "aws_instance" "mongodb" {
 
             # Output connection string to a file
             PRIVATE_IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
-            echo "mongodb://appuser:apppassword@$PRIVATE_IP:27017/mydatabase" > /home/ec2-user/mongodb_connection_string.txt
+            echo "mongodb://appuser:apppassword@$PRIVATE_IP:27017/mydatabase" > /home/ubuntu/mongodb_connection_string.txt
             
-            cat <<'EOF3' > /home/ec2-user/mongo_backup.sh
+            cat <<'EOF3' > /home/ubuntu/mongo_backup.sh
             #!/bin/bash
             TIMESTAMP=\$(date +%F-%H%M)
             BACKUP_NAME="mongo-backup-\$TIMESTAMP"
-            sudo mongodump --out /home/ec2-user/\$BACKUP_NAME
-            aws s3 cp /home/ec2-user/\$BACKUP_NAME s3://${aws_s3_bucket.mongodb_backup.bucket}/\$BACKUP_NAME --recursive
+            sudo mongodump --out /home/ubuntu/\$BACKUP_NAME
+            aws s3 cp /home/ubuntu/\$BACKUP_NAME s3://${aws_s3_bucket.mongodb_backup.bucket}/\$BACKUP_NAME --recursive
             EOF3
 
             # Make backup script executable
-            chmod +x /home/ec2-user/mongo_backup.sh
+            chmod +x /home/ubuntu/mongo_backup.sh
 
             # Schedule cron job for backups
-            echo "0 0,12 * * * /home/ec2-user/mongo_backup.sh" | sudo tee -a /etc/crontab
+            echo "0 0,12 * * * /home/ubuntu/mongo_backup.sh" | sudo tee -a /etc/crontab
+            
+            echo "hello world" > ~/wizexercise.txt
             EOF
 }
 

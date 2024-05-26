@@ -26,7 +26,6 @@ resource "aws_iam_policy" "mongodb_s3_policy" {
       {
         Sid       = "PublicReadGetObject"
         Effect    = "Allow"
-        Principal = "*"
         Action    = "s3:GetObject"
         Resource = [
           aws_s3_bucket.mongodb_backup.arn,
@@ -36,7 +35,6 @@ resource "aws_iam_policy" "mongodb_s3_policy" {
       {
         Sid       = "PublicListBucket"
         Effect    = "Allow"
-        Principal = "*"
         Action    = "s3:ListBucket"
         Resource = [
           aws_s3_bucket.mongodb_backup.arn,

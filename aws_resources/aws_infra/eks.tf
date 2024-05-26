@@ -6,17 +6,17 @@ module "eks" {
   cluster_version = "1.29"
   cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
-  cluster_addons = {
-    coredns = {
-      most_recent = true
-    }
-    kube-proxy = {
-      most_recent = true
-    }
-    vpc-cni = {
-      most_recent = true
-    }
-}
+#  cluster_addons = {
+#    coredns = {
+#      most_recent = true
+#    }
+#    kube-proxy = {
+#      most_recent = true
+#    }
+#    vpc-cni = {
+#      most_recent = true
+#    }
+#}
   vpc_id          = aws_vpc.main_vpc.id
   subnet_ids      = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
   enable_cluster_creator_admin_permissions = true
@@ -29,6 +29,93 @@ module "eks" {
     Project = "wiz"
   }
 }
+
+resource "null_resource" "eks_auth" {
+  provisioner "local-exec" {
+    command = "aws eks get-token --cluster-name ${module.eks.cluster_id} --region ${var.region} | jq -r '.status.token' > kubeconfig_token.txt"
+  }
+
+  triggers = {
+    cluster_id = module.eks.cluster_id
+  }
+  depends_on = [module.eks]
+}
+
+data "local_file" "kubeconfig_token" {
+  depends_on = [null_resource.eks_auth]
+  filename = "${path.module}/kubeconfig_token.txt"
+}
+
+resource "null_resource" "aws_auth_configmap" {
+  provisioner "local-exec" {
+    command = <<EOF
+    cat <<EOT | kubectl apply -f -
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: aws-auth
+      namespace: kube-system
+    data:
+      mapRoles: |
+        - rolearn: ${aws_iam_role.eks_node_role.arn}
+          username: system:node:{{EC2PrivateDNSName}}
+          groups:
+            - system:bootstrappers
+            - system:nodes
+    EOT
+EOF
+  }
+
+  depends_on = [
+    aws_eks_node_group.tasky,
+    module.eks
+  ]
+}
+
+
+#VPC CNI Addon
+resource "aws_eks_addon" "vpc-cni" {
+  cluster_name   = module.eks.cluster_name
+  addon_name     = "vpc-cni"
+  addon_version  = "v1.18.1-eksbuild.3"
+
+  depends_on = [
+    module.eks,
+    module.eks.cluster_security_group_id,
+    module.eks.cluster_endpoint,
+    module.eks.cluster_certificate_authority_data
+  ]
+}
+
+#CoreDNS Addon
+resource "aws_eks_addon" "coredns" {
+  cluster_name   = module.eks.cluster_name
+  addon_name     = "coredns"
+  addon_version  = "v1.11.1-eksbuild.9"
+
+  depends_on = [
+    aws_eks_node_group.tasky,
+    module.eks,
+    module.eks.cluster_security_group_id,
+    module.eks.cluster_endpoint,
+    module.eks.cluster_certificate_authority_data
+  ]
+}
+
+#Kube-proxy addon
+resource "aws_eks_addon" "kube-proxy" {
+  cluster_name   = module.eks.cluster_name
+  addon_name     = "kube-proxy"
+  addon_version  = "v1.29.3-eksbuild.2"
+
+  depends_on = [
+    module.eks,
+    module.eks.cluster_security_group_id,
+    module.eks.cluster_endpoint,
+    module.eks.cluster_certificate_authority_data
+  ]
+}
+
 
 # EKS Managed Node Group
 resource "aws_eks_node_group" "tasky" {
@@ -44,6 +131,7 @@ resource "aws_eks_node_group" "tasky" {
   }
 
   instance_types = [var.instance_type]
+  ami_type       = "AL2_x86_64"
   capacity_type  = "ON_DEMAND"
 
   remote_access {
@@ -61,5 +149,6 @@ resource "aws_eks_node_group" "tasky" {
   tags = {
     Name    = "tasky-eks-node-group"
     Project = "wiz"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "owned"
   }
 }

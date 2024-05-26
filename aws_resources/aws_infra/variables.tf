@@ -1,23 +1,23 @@
 variable "region" {
   description = "AWS region"
-  default     = "eu-central-1"
+  default     = "eu-west-1"
 }
 
 variable "instance_type" {
   description = "EC2 instance type"
-  default     = "t2.micro"
+  default     = "t3.medium"
 }
 
-#variable "mongodb_key_name" {
-#  description = "The name of the SSH key pair for the MongoDB instance"
-#  default = "ssh-mongodb-key"
-#}
+variable "mongodb_key_name" {
+  description = "The name of the SSH key pair for the MongoDB instance"
+  default = "ssh-mongodb-key"
+}
 
-#variable "public_mongodb_key_path" {
-#  description = "The path to the public key file to use for the MongoDB key pair"
-#  type        = string
-#  default     = "~/.ssh/ssh-mongodb-key.pub"
-#}
+variable "public_mongodb_key_path" {
+  description = "The path to the public key file to use for the MongoDB key pair"
+  type        = string
+  default     = "~/.ssh/ssh-mongodb-key.pub"
+}
 
 variable "eks_key_name" {
   description = "Name of the key pair"
