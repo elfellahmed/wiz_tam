@@ -1,19 +1,34 @@
 
-# Create EC2 Key Pair
+# Create EKS Key Pair
 resource "aws_key_pair" "eks_key_pair" {
-  key_name   = var.key_name
-  public_key = file(var.public_key_path)
+  key_name   = var.eks_key_name
+  public_key = file(var.public_eks_key_path)
 }
 
-# Security group for the MongoDB instance
+# Create MongoDB Key Pair
+#resource "aws_key_pair" "mongodb_key_pair" {
+#  key_name   = var.mongodb_key_name
+#  public_key = file(var.public_mongodb_key_path)
+#}
+
+# Security Group for MongoDB EC2 instance
 resource "aws_security_group" "mongodb_sg" {
-  vpc_id = aws_vpc.main.id
+  name        = "mongodb-sg"
+  description = "Security group for MongoDB instance"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   ingress {
     from_port   = 27017
     to_port     = 27017
     protocol    = "tcp"
-    cidr_blocks = ["10.10.0.0/16"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -24,14 +39,17 @@ resource "aws_security_group" "mongodb_sg" {
   }
 
   tags = {
-    Name = "mongodb-sg"
+    Name    = "mongodb-sg"
     Project = "wiz"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
   }
 }
 
-# Security group for the load balancer
-resource "aws_security_group" "lb_sg" {
-  vpc_id = aws_vpc.main.id
+# Security Group for ALB
+resource "aws_security_group" "alb_sg" {
+  name        = "alb-sg"
+  description = "Security group for ALB"
+  vpc_id      = aws_vpc.main_vpc.id
 
   ingress {
     from_port   = 80
@@ -48,61 +66,83 @@ resource "aws_security_group" "lb_sg" {
   }
 
   tags = {
-    Name = "lb-sg"
+    Name    = "alb-sg"
     Project = "wiz"
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
   }
 }
 
-resource "aws_iam_role" "mongodb_role" {
-  name = "MongoDBAdminRole"
+# Security Group for EKS Control Plane
+resource "aws_security_group" "eks_control_plane_sg" {
+  name        = "eks-control-plane-sg"
+  description = "EKS Control Plane Security Group"
+  vpc_id      = aws_vpc.main_vpc.id
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        },
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
+  ingress {
+    description = "Allow worker nodes to communicate with control plane"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [aws_subnet.private_subnet_1.cidr_block, aws_subnet.private_subnet_2.cidr_block]
+  }
+
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "mongodb_role_policy" {
-  role       = aws_iam_role.mongodb_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+# Security Group for EKS Worker Nodes
+resource "aws_security_group" "eks_worker_sg" {
+  name        = "eks-worker-sg"
+  description = "EKS Worker Nodes Security Group"
+  vpc_id      = aws_vpc.main_vpc.id
+
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    "kubernetes.io/cluster/tasky-eks-cluster" = "shared"
+  }
+}
+resource "aws_security_group_rule" "eks_worker_ingress_control_plane" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.eks_control_plane_sg.id
+  security_group_id        = aws_security_group.eks_worker_sg.id
+  description              = "Allow communication with control plane"
 }
 
-resource "aws_iam_instance_profile" "mongodb_instance_profile" {
-  name = "MongoDBInstanceProfile"
-  role = aws_iam_role.mongodb_role.name
+resource "aws_security_group_rule" "eks_worker_ingress_worker" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.eks_worker_sg.id
+  security_group_id        = aws_security_group.eks_worker_sg.id
+  description              = "Allow communication between worker nodes"
 }
 
-# Bucket Policy to allow public read access and listing
-resource "aws_s3_bucket_policy" "mongodb_backup_policy" {
-  bucket = aws_s3_bucket.mongodb_backup.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "PublicReadGetObject"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.mongodb_backup.arn}/*"
-      },
-      {
-        Sid       = "PublicListBucket"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:ListBucket"
-        Resource  = "${aws_s3_bucket.mongodb_backup.arn}"
-      }
-    ]
-  })
+resource "aws_security_group_rule" "eks_worker_ingress_app" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.eks_worker_sg.id
+  description       = "Allow application-specific traffic"
 }
 
 # Create Kubernetes Secret for MongoDB connection string
@@ -116,35 +156,4 @@ resource "kubernetes_secret" "mongodb_connection_string" {
   }
 
   type = "Opaque"
-}
-
-resource "aws_iam_role" "eks_node_group_role" {
-  name = "eks-node-group-role"
-
-  assume_role_policy = data.aws_iam_policy_document.eks_node_assume_role_policy.json
-}
-
-data "aws_iam_policy_document" "eks_node_assume_role_policy" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "eks_node_group_policy" {
-  role       = aws_iam_role.eks_node_group_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  role       = aws_iam_role.eks_node_group_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "ecr_read_only_policy" {
-  role       = aws_iam_role.eks_node_group_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
