@@ -1,0 +1,31 @@
+aws eks --region new-cluster-region update-kubeconfig --name new-cluster-name --alias myalias
+
+kubectl config get-contexts
+
+kubectl create namespace argocd
+
+argocd login --core
+
+argocd admin initial-password -n argocd
+
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+argocd app create guestbook --repo https://github.com/argoproj/argocd-example-apps.git --path guestbook --dest-server https://kubernetes.default.svc --dest-namespace guestbook
+
+
+helm install app-chart . --namespace tasky-wiz --create-namespace
+helm install app-chart . --namespace le-guest
+
+ssh -i ~/.ssh/ssh-mongodb-key ec2-user@18.170.216.29
+
+
+mongo --authenticationDatabase "admin" -u "admin" -p
+use admin
+db.getUsers()
+use tasky
+db.getUsers()
+db.system.users.find().pretty()
+db.adminCommand({getParameter: 1, authenticationMechanisms: 1})
+
+
+kubectl run -i --tty --rm debug --image=mongo --restart=Never -- bash
