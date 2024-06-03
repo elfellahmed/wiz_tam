@@ -1,9 +1,9 @@
 # EKS Cluster
 module "eks" {
   source          = "terraform-aws-modules/eks/aws"
-  version         = "~> 20.0"
+  version         = "~> 20.11"
   cluster_name    = "tasky-eks-cluster"
-  cluster_version = "1.29"
+  cluster_version = "1.30"
   cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
 #  cluster_addons = {
@@ -131,8 +131,8 @@ resource "aws_eks_node_group" "tasky" {
   }
 
   instance_types = [var.instance_type]
-  ami_type       = "AL2_x86_64"
-  capacity_type  = "ON_DEMAND"
+  #ami_type       = "AL2_x86_64"
+  #capacity_type  = "ON_DEMAND"
 
   remote_access {
     ec2_ssh_key = aws_key_pair.eks_key_pair.key_name
